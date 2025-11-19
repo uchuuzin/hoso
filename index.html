@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>放送原稿 編集・統合マネージャー</title>
+    <!-- Tailwind CSSの読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* カスタムフォントとレスポンシブな基本設定 */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* 印刷時の設定（必要であれば） */
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+        /* マスク機能用のスタイル */
+        .mask-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            border-radius: inherit;
+            pointer-events: none;
+            text-align: center;
+        }
+        /* 読み上げ機能が使いやすいように、コンテンツを明確に囲む */
+        .masked-content {
+            position: relative; 
+            display: block; 
+            border-radius: 0.375rem; 
+            border: 1px dashed transparent; 
+            padding: 8px;
+            transition: border-color 0.2s;
+        }
+        /* iPadなどの読み上げ機能で選択しやすいよう、ホバーで境界線を強調 */
+        .masked-content:hover {
+            border-color: #3b82f6;
+        }
+        .script-box {
+            position: relative;
+        }
+        /* 編集フォームを非表示にする初期設定 */
+        #data-editor-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out;
+        }
+        #data-editor-container.open {
+            max-height: 3000px; /* 十分な高さを確保 */
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-6xl mx-auto bg-white shadow-2xl rounded-xl min-h-[90vh]">
+        <header class="p-6 bg-blue-700 text-white rounded-t-xl">
+            <h1 class="text-3xl font-extrabold text-center">
+                宝仙小 ラジオ放送原稿 編集・統合マネージャー
+            </h1>
+            <p class="text-center mt-1 opacity-80">画面上でデータを編集・追加し、最新版のHTMLをダウンロードできます。</p>
+        </header>
+
+        <!-- メインレイアウト: 日付選択 (左) と 詳細表示 (右) -->
+        <div class="flex flex-col lg:flex-row">
+            
+            <!-- 1. 日付選択サイドバー (リスト) -->
+            <div id="date-selector" class="w-full lg:w-1/4 p-4 lg:p-6 bg-gray-50 border-r border-gray-200 no-print">
+                <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">🗓️ 放送日を選択</h2>
+                
+                <!-- 編集フォーム切り替えボタン -->
+                <button id="toggle-editor-button" 
+                        class="w-full text-center p-3 my-2 rounded-lg transition duration-150 ease-in-out bg-purple-500 hover:bg-purple-600 text-white font-bold shadow-lg no-print flex items-center justify-center">
+                    <span id="editor-status">➕ 新規データを追加</span>
+                </button>
+
+                <!-- 【全面改良】データ編集/追加フォームコンテナ -->
+                <div id="data-editor-container" class="bg-white p-0 rounded-lg shadow-inner mt-2 border border-purple-200">
+                    <div class="p-4">
+                        <h3 id="editor-title" class="text-lg font-bold text-purple-700 mb-3">新規放送データ入力</h3>
+                        
+                        <input type="hidden" id="input-id">
+
+                        <label class="block mb-2"><span class="text-sm font-medium">日付 (例: 1月20日 (金)):</span>
+                            <input type="text" id="input-date" class="w-full p-2 border rounded" placeholder="例: 2月10日 (金)">
+                        </label>
+                        <label class="block mb-2"><span class="text-sm font-medium">放送番号:</span>
+                            <input type="number" id="input-broadcast-no" class="w-full p-2 border rounded" placeholder="例: 4">
+                        </label>
+                        
+                        <!-- 朝の放送編集フィールド -->
+                        <h4 class="font-bold mt-4 mb-1 text-orange-700 border-t pt-2">☀️ 朝の放送設定</h4>
+                        <label class="block mb-2"><span class="text-sm font-medium">曲目 (朝):</span>
+                            <input type="text" id="input-morning-music" class="w-full p-2 border rounded" placeholder="例: 1曲目：ジブリ (曲名未定)">
+                        </label>
+                        <label class="block mb-2"><span class="text-sm font-medium">コーナー名 (朝):</span>
+                            <input type="text" id="input-morning-corner" class="w-full p-2 border rounded" placeholder="例: 十善戒 音声ファイル">
+                        </label>
+
+                        <!-- 昼の放送編集フィールド -->
+                        <h4 class="font-bold mt-4 mb-1 text-blue-700 border-t pt-2">🍜 昼の放送設定</h4>
+                        <label class="block mb-2"><span class="text-sm font-medium">導入セリフ (イントロ):</span>
+                            <textarea id="input-intro" class="w-full p-2 border rounded h-16" placeholder="例: 全・宝仙小の皆さん、こんにちは！..."></textarea>
+                        </label>
+                        <label class="block mb-2"><span class="text-sm font-medium">曲目 (昼 / 各曲を「|」で区切る):</span>
+                            <input type="text" id="input-music" class="w-full p-2 border rounded" placeholder="例: 1曲目：〇〇|2曲目：✕✕|3曲目：△△">
+                            <p class="text-xs text-gray-500 mt-1">※3曲目以降も「|」で区切って追記できます。</p>
+                        </label>
+                        <label class="block mb-2"><span class="text-sm font-medium">雑学タイトル:</span>
+                            <input type="text" id="input-trivia-title" class="w-full p-2 border rounded" placeholder="例: ランチタイム雑学：世界のバレンタイン">
+                        </label>
+                        <label class="block mb-2"><span class="text-sm font-medium">雑学内容 (メインの雑学1つ分):</span>
+                            <textarea id="input-trivia-content" class="w-full p-2 border rounded h-24" placeholder="例: フランスでは、給食の時間が約1時間半と長く...（雑学一つ分の内容を入力）"></textarea>
+                        </label>
+                        <label class="block mb-2"><span class="text-sm font-medium">締めのセリフ (クロージング):</span>
+                            <textarea id="input-closing" class="w-full p-2 border rounded h-16" placeholder="例: もう、昼休みのお時間がきてしまいました。..."></textarea>
+                        </label>
+
+                        <button id="add-data-button" class="w-full p-3 mt-4 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold transition">
+                            データに追加＆更新
+                        </button>
+                    </div>
+                    
+                </div>
+                
+                <!-- 詳細表示クリアボタン -->
+                <button id="clear-selection-button" 
+                        class="w-full text-center p-3 my-2 rounded-lg transition duration-150 ease-in-out bg-gray-200 hover:bg-gray-300 border border-gray-300 shadow-sm font-bold text-gray-700 no-print">
+                    詳細表示をクリア
+                </button>
+
+                <!-- 【重要】ダウンロードボタン -->
+                <button id="download-button" 
+                        class="w-full text-center p-3 mt-4 rounded-lg transition duration-150 ease-in-out bg-green-500 hover:bg-green-600 text-white font-bold shadow-xl no-print">
+                    💾 最新ファイルをダウンロード
+                </button>
+                
+                <!-- 日付ボタンがここにJSで挿入される -->
+            </div>
+
+            <!-- 2. 詳細表示エリア (大画面) -->
+            <div id="script-detail" class="w-full lg:w-3/4 p-6 lg:p-10 relative">
+                <!-- マスクボタンエリア (STATIC) -->
+                <div id="mask-controls" class="mb-4 text-right no-print hidden">
+                    <button id="mask-button" 
+                            class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">
+                        🔒 内容を隠す (マスクON)
+                    </button>
+                </div>
+
+                <p id="initial-message" class="text-center text-gray-500 mt-20 text-lg">
+                    左側のリストから放送日を選択してください。
+                </p>
+                <!-- 選択された原稿の動的コンテンツはここに追加される -->
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    // ----------------------------------------------------
+    // 1. 放送データ（初期データと編集用ロジック）
+    // ----------------------------------------------------
+
+    // 初期データ (このデータがアプリ起動時に読み込まれます)
+    // 【重要】新しい放送日を追加する際は、以下のリストの最後に {} ブロックを追加してください。
+    const initialBroadcastData = [
+        {
+            id: 1, // ユニークなID (数字)
+            date: "12月1日 (月)", // UIに表示される日付
+            broadcastNo: 1, // 放送番号
+            morning: { title: "朝の放送", music: "1曲目：ジブリ (曲名未定)", corner: "十善戒 音声ファイル" },
+            lunch: {
+                title: "昼の放送",
+                music: ["1曲目：キセキ (GReeeeN)", "2曲目：こたえあわせ (back number)", "3曲目：怪獣の花唄 (Vaundy)"],
+                intro: "全・宝仙小の皆さん、こんにちは！さて、始まりました！『ランチタイムミュージック』のお時間です！この番組は、皆さんの毎日がさらに楽しくなるように発信する宝仙小ラジオ番組です。",
+                triviaTitle: "ランチタイム雑学：世界の給食・ランチ事情",
+                triviaContent: [ 
+                    { title: "フランス", text: "フランスでは、給食の時間が約1時間半と長く、コース料理のように前菜からデザートまでゆっくりと食べます。食育を大切にしていて、給食の時間も授業の一環と考えられています。" },
+                    { title: "インド", text: "インドの給食は、多くの場合「ベジタリアン（野菜だけ）」の献立です。カレーライスではなく、色々な種類の豆のカレーや野菜の炒め物が出ます。そして、インドではカトラリー（スプーンやお箸）を使わず、右手だけを使って食べるのが一般的です。" },
+                    { title: "ブラジル", text: "ブラジルでは、給食は生徒の体格や栄養状態に合わせて提供されます。アレルギー対応や、宗教的な食事制限にも柔軟に対応しているのが特徴です。" }
+                ],
+                closing: "もう、昼休みのお時間がきてしまいました。お楽しみいただけましたか？それでは、今日はこのへんで。今日の放送の担当は**（自分の名前）**と**〇〇**でした！また明日もお会いしましょう！さようなら！"
+            }
+        },
+        {
+            id: 2,
+            date: "12月15日 (火)",
+            broadcastNo: 2,
+            morning: { title: "朝の放送", music: "1曲目：ジブリ (曲名未定)", corner: "十善戒 音声ファイル" },
+            lunch: {
+                title: "昼の放送",
+                music: ["1曲目：水平線 (back number)", "2曲目：エジソン (水曜日のカンパネラ)", "3曲目：パプリカ (Foorin)"],
+                intro: "全・宝仙小の皆さん、こんにちは！さて、始まりました！『ランチタイムミュージック』のお時間です！この番組は、皆さんの毎日がさらに楽しくなるように発信する宝仙小ラジオ番組です。",
+                triviaTitle: "ランチタイム雑学：世界のクリスマス",
+                triviaContent: [
+                    { title: "ドイツ", text: "クリスマスの約4週間前から「アドベント」という期間に入ります。アドベントカレンダーはドイツ発祥です。" },
+                    { title: "オーストラリア", text: "南半球で真夏なので、サンタさんはカンガルーやサーフボードに乗ってくると言われています。ビーチや庭でバーベキューをします。" },
+                    { title: "日本", text: "クリスマスにフライドチキンを食べる習慣があるのは、世界でも珍しい日本の文化だと言われています。" }
+                ],
+                closing: "もう、昼休みのお時間がきてしまいました。お楽しみいただけましたか？それでは、今日はこのへんで。今日の放送の担当は**（自分の名前）**と**〇〇**でした！また明日もお会いしましょう！さようなら！"
+            }
+        },
+        {
+            id: 3,
+            date: "1月XX日 (水)",
+            broadcastNo: 3,
+            morning: { title: "朝の放送", music: "1曲目：ジブリ (曲名未定)", corner: "十善戒 音声ファイル" },
+            lunch: {
+                title: "昼の放送",
+                music: ["家カフェCDより3曲（曲名未定）"],
+                intro: "全・宝仙小の皆さん、こんにちは！さて、始まりました！『ランチタイムミュージック』のお時間です！この番組は、皆さんの毎日がさらに楽しくなるように発信する宝仙小ラジオ番組です。",
+                triviaTitle: "ランチタイム雑学：お正月の遊び",
+                triviaContent: [
+                    { title: "凧揚げ", text: "凧揚げはもともと、子どもの成長を願って大人がやっていた行事です。江戸時代に大人気になりましたが、人がぶつかったり火事になったりして、一時禁止されたこともあったそうです。" },
+                    { title: "羽根つき", text: "羽根つきで使う羽根（むくろじ）には、虫を食べる黒い豆（ムクロジの種）が付いています。これは、羽根つきをすることで、厄を払い、蚊などの害虫を追い払う魔除けの意味があったと言われています。" }
+                ],
+                closing: "もう、昼休みのお時間がきてしまいました。お楽しみいただけましたか？それでは、今日はこのへんで。今日の放送の担当は**（自分の名前）**と**〇〇**でした！また明日もお会いしましょう！さようなら！"
+            }
+        },
+    ];
+    
+    // 現在アクティブなデータ（localStorageからロードするか、初期データを使用）
+    let currentBroadcastData = [];
+
+    const LOCAL_STORAGE_KEY = 'hosen_broadcast_data';
+
+    // 2. localStorageからデータをロードする
+    function loadData() {
+        try {
+            const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (storedData) {
+                currentBroadcastData = JSON.parse(storedData);
+            } else {
+                currentBroadcastData = initialBroadcastData;
+                saveData();
+            }
+        } catch (e) {
+            console.error("Failed to load data from localStorage, using initial data.", e);
+            currentBroadcastData = initialBroadcastData;
+        }
+    }
+
+    // 3. データをlocalStorageに保存する
+    function saveData() {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentBroadcastData));
+        } catch (e) {
+            console.error("Failed to save data to localStorage.", e);
+        }
+    }
+
+
+    // ----------------------------------------------------
+    // 4. UI要素の取得
+    // ----------------------------------------------------
+    const selector = document.getElementById('date-selector');
+    const detailArea = document.getElementById('script-detail');
+    const initialMessage = document.getElementById('initial-message');
+    const maskControls = document.getElementById('mask-controls');
+    const maskButton = document.getElementById('mask-button');
+    const clearButton = document.getElementById('clear-selection-button'); 
+    const downloadButton = document.getElementById('download-button');
+    const toggleEditorButton = document.getElementById('toggle-editor-button');
+    const dataEditorContainer = document.getElementById('data-editor-container');
+    const editorTitle = document.getElementById('editor-title');
+    const addDataButton = document.getElementById('add-data-button');
+    const editorStatus = document.getElementById('editor-status');
+    
+    // フォーム要素の取得
+    const inputId = document.getElementById('input-id');
+    const inputDate = document.getElementById('input-date');
+    const inputBroadcastNo = document.getElementById('input-broadcast-no');
+    const inputMorningMusic = document.getElementById('input-morning-music');
+    const inputMorningCorner = document.getElementById('input-morning-corner');
+    const inputIntro = document.getElementById('input-intro');
+    const inputMusic = document.getElementById('input-music');
+    const inputTriviaTitle = document.getElementById('input-trivia-title');
+    const inputTriviaContent = document.getElementById('input-trivia-content');
+    const inputClosing = document.getElementById('input-closing');
+
+    let isMasked = false;
+    let isEditorOpen = false;
+    let currentEditId = null; // 現在編集中のデータのID
+
+    // ----------------------------------------------------
+    // 5. データ編集フォームのトグルと初期化
+    // ----------------------------------------------------
+    toggleEditorButton.addEventListener('click', () => {
+        if (!isEditorOpen) {
+            // エディタを開くときは、必ず新規追加モードで初期化
+            resetEditorForm();
+            openEditor();
+        } else {
+            closeEditor();
+        }
+    });
+
+    function openEditor(mode = 'add', data = null) {
+        dataEditorContainer.classList.add('open');
+        isEditorOpen = true;
+        
+        if (mode === 'edit' && data) {
+            currentEditId = data.id;
+            editorTitle.textContent = `変更を編集 (ID: ${data.id}, 放送番号: ${data.broadcastNo})`;
+            addDataButton.textContent = '✅ この変更を保存';
+            addDataButton.classList.replace('bg-red-500', 'bg-green-600');
+            addDataButton.classList.replace('hover:bg-red-600', 'hover:bg-green-700');
+            
+            // フォームにデータをロード
+            inputDate.value = data.date;
+            inputBroadcastNo.value = data.broadcastNo;
+            inputId.value = data.id;
+
+            // 朝の放送
+            inputMorningMusic.value = data.morning.music || '';
+            inputMorningCorner.value = data.morning.corner || '';
+
+            // 昼の放送
+            inputIntro.value = data.lunch.intro || '';
+            // 音楽配列を「|」区切りの文字列に戻す
+            inputMusic.value = data.lunch.music.join('|');
+            inputTriviaTitle.value = data.lunch.triviaTitle || '';
+            // 雑学コンテンツは最初の項目のみを編集対象とする (UI簡略化のため)
+            inputTriviaContent.value = data.lunch.triviaContent[0]?.text || '';
+            inputClosing.value = data.lunch.closing || '';
+            
+            editorStatus.innerHTML = '❌ 編集フォームを閉じる';
+            toggleEditorButton.classList.replace('bg-purple-500', 'bg-red-500');
+            toggleEditorButton.classList.replace('hover:bg-purple-600', 'hover:bg-red-600');
+
+        } else {
+            // 新規追加モード
+            resetEditorForm();
+            editorStatus.innerHTML = '❌ 編集フォームを閉じる';
+            toggleEditorButton.classList.replace('bg-purple-500', 'bg-red-500');
+            toggleEditorButton.classList.replace('hover:bg-purple-600', 'hover:bg-red-600');
+        }
+    }
+
+    function closeEditor() {
+        dataEditorContainer.classList.remove('open');
+        isEditorOpen = false;
+        editorStatus.innerHTML = '➕ 新規データを追加';
+        toggleEditorButton.classList.replace('bg-red-500', 'bg-purple-500');
+        toggleEditorButton.classList.replace('hover:bg-red-600', 'hover:bg-purple-600');
+        resetEditorForm();
+    }
+    
+    function resetEditorForm() {
+        currentEditId = null;
+        editorTitle.textContent = '新規放送データ入力';
+        addDataButton.textContent = 'データに追加＆更新';
+        addDataButton.classList.replace('bg-green-600', 'bg-red-500');
+        addDataButton.classList.replace('hover:bg-green-700', 'hover:bg-red-600');
+        
+        // フォームを空にする
+        document.getElementById('input-id').value = '';
+        document.getElementById('input-date').value = '';
+        document.getElementById('input-broadcast-no').value = '';
+        document.getElementById('input-morning-music').value = '';
+        document.getElementById('input-morning-corner').value = '';
+        document.getElementById('input-intro').value = '';
+        document.getElementById('input-music').value = '';
+        document.getElementById('input-trivia-title').value = '';
+        document.getElementById('input-trivia-content').value = '';
+        document.getElementById('input-closing').value = '';
+    }
+
+
+    // ----------------------------------------------------
+    // 6. データ保存処理 (追加・更新を兼ねる)
+    // ----------------------------------------------------
+    addDataButton.addEventListener('click', saveBroadcastData);
+
+    function saveBroadcastData() {
+        const id = inputId.value ? parseInt(inputId.value) : null;
+        const date = inputDate.value.trim();
+        const broadcastNo = parseInt(inputBroadcastNo.value.trim());
+        const morningMusic = inputMorningMusic.value.trim();
+        const morningCorner = inputMorningCorner.value.trim();
+        const intro = inputIntro.value.trim();
+        const musicString = inputMusic.value.trim();
+        const triviaTitle = inputTriviaTitle.value.trim();
+        const triviaContentText = inputTriviaContent.value.trim();
+        const closing = inputClosing.value.trim();
+
+        if (!date || isNaN(broadcastNo) || !intro || !triviaTitle || !closing || !musicString || !morningMusic) {
+            alert("日付、放送番号、朝の曲目、昼のセリフ、雑学タイトル、締めのセリフ、昼の曲目は全て必須入力です。");
+            return;
+        }
+
+        // 曲目リストを「|」で分割し、整形
+        const musicArray = musicString.split('|').map(m => m.trim()).filter(m => m.length > 0);
+        
+        // 雑学コンテンツは一つに統一 (UI簡略化のため)
+        const triviaContentArray = [{ 
+            title: triviaTitle, 
+            text: triviaContentText || "コンテンツが未入力です。" 
+        }];
+
+        const newData = {
+            id: id,
+            date: date,
+            broadcastNo: broadcastNo,
+            morning: { 
+                title: "朝の放送", 
+                music: morningMusic, 
+                corner: morningCorner 
+            },
+            lunch: {
+                title: "昼の放送",
+                music: musicArray,
+                intro: intro,
+                triviaTitle: triviaTitle,
+                triviaContent: triviaContentArray,
+                closing: closing
+            }
+        };
+
+        if (id) {
+            // 既存データの更新
+            const index = currentBroadcastData.findIndex(d => d.id === id);
+            if (index !== -1) {
+                currentBroadcastData[index] = newData;
+                alert(`放送番号 ${broadcastNo} (${date}) のデータが更新されました！`);
+            }
+        } else {
+            // 新規データの追加
+            const newId = currentBroadcastData.length > 0 
+                ? Math.max(...currentBroadcastData.map(d => d.id)) + 1
+                : 1;
+            newData.id = newId;
+            currentBroadcastData.push(newData);
+            alert(`放送番号 ${broadcastNo} (${date}) のデータが新規追加されました！`);
+        }
+
+        saveData();
+        renderSelector();
+        closeEditor();
+    }
+
+
+    // ----------------------------------------------------
+    // 7. 日付選択ボタンの生成
+    // ----------------------------------------------------
+    function renderSelector() {
+        // 既存のボタンをクリア（コントロールボタンは残す）
+        const existingButtons = selector.querySelectorAll('button:not(#clear-selection-button):not(#download-button):not(#toggle-editor-button):not(#add-data-button)');
+        existingButtons.forEach(btn => btn.remove());
+
+        // 放送番号順に並べ替える
+        const sortedData = [...currentBroadcastData].sort((a, b) => a.broadcastNo - b.broadcastNo);
+
+        sortedData.forEach(data => {
+            const button = document.createElement('button');
+            button.className = "w-full text-left p-3 my-1 rounded-lg transition duration-150 ease-in-out bg-white hover:bg-blue-100 border border-gray-200 shadow-sm flex justify-between items-center group";
+            
+            button.innerHTML = `
+                <div>
+                    <div class="font-bold text-gray-800">${data.date}</div>
+                    <div class="text-sm text-blue-500">放送番号 ${data.broadcastNo}</div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- 編集ボタン -->
+                    <button class="edit-button p-2 text-sm bg-purple-100 text-purple-600 rounded-md opacity-0 group-hover:opacity-100 transition duration-300 hover:bg-purple-200 shadow-sm"
+                            data-id="${data.id}"
+                            onclick="event.stopPropagation(); loadEditorForDataById(${data.id});">
+                        編集
+                    </button>
+                    <!-- 詳細表示ボタン（クリックイベントは親ボタンに） -->
+                </div>
+            `;
+            // 詳細表示のメインクリックイベント
+            button.onclick = () => selectScript(data);
+            selector.appendChild(button);
+        });
+    }
+    
+    // 編集ボタンクリック時の処理
+    window.loadEditorForDataById = function(id) {
+        const dataToEdit = currentBroadcastData.find(d => d.id === id);
+        if (dataToEdit) {
+            selectScript(dataToEdit); // 詳細を表示
+            openEditor('edit', dataToEdit); // 編集フォームにロード
+        } else {
+            alert("編集対象のデータが見つかりませんでした。");
+        }
+    }
+
+
+    // ----------------------------------------------------
+    // 8. 選択された原稿の詳細表示
+    // ----------------------------------------------------
+    function selectScript(data) {
+        if (initialMessage) initialMessage.classList.add('hidden');
+        maskControls.classList.remove('hidden');
+
+        let existingContent = document.getElementById('current-script-display');
+        if (existingContent) {
+            existingContent.remove();
+        }
+
+        const newContent = document.createElement('div');
+        newContent.id = 'current-script-display';
+        newContent.innerHTML = renderScriptHTML(data);
+        
+        detailArea.appendChild(newContent); 
+
+        isMasked = false;
+        updateMaskState();
+    }
+    
+    // ----------------------------------------------------
+    // 9. マスク機能の切り替え
+    // ----------------------------------------------------
+    maskButton.addEventListener('click', toggleMask);
+
+    function toggleMask() {
+        isMasked = !isMasked;
+        updateMaskState();
+    }
+
+    function updateMaskState() {
+        const maskElements = document.querySelectorAll('.masked-content');
+        const button = document.getElementById('mask-button');
+        
+        if (isMasked) {
+            maskElements.forEach(el => {
+                if (!el.querySelector('.mask-overlay')) {
+                    const maskOverlay = document.createElement('div');
+                    maskOverlay.className = 'mask-overlay';
+                    maskOverlay.innerHTML = '<span class="text-3xl font-extrabold select-none">🔒 CONTENTS MASKED 🔒</span>';
+                    el.appendChild(maskOverlay);
+                }
+            });
+            button.textContent = '🔓 内容を表示 (マスクOFF)';
+            button.classList.remove('bg-red-500', 'hover:bg-red-600');
+            button.classList.add('bg-green-500', 'hover:bg-green-600');
+        } else {
+            maskElements.forEach(el => {
+                const overlay = el.querySelector('.mask-overlay');
+                if (overlay) {
+                    el.removeChild(overlay);
+                }
+            });
+            button.textContent = '🔒 内容を隠す (マスクON)';
+            button.classList.remove('bg-green-500', 'hover:bg-green-600');
+            button.classList.add('bg-red-500', 'hover:bg-red-600');
+        }
+    }
+    
+    // ----------------------------------------------------
+    // 10. 詳細表示のクリア機能
+    // ----------------------------------------------------
+    clearButton.addEventListener('click', clearSelection);
+
+    function clearSelection() {
+        let existingContent = document.getElementById('current-script-display');
+        if (existingContent) {
+            existingContent.remove();
+        }
+
+        maskControls.classList.add('hidden');
+        initialMessage.classList.remove('hidden');
+        isMasked = false;
+        updateMaskState(); 
+        
+        // クリア時に編集フォームも閉じる
+        closeEditor();
+    }
+
+    // ----------------------------------------------------
+    // 11. ファイルダウンロード機能
+    // ----------------------------------------------------
+    downloadButton.addEventListener('click', downloadCurrentFile);
+
+    function downloadCurrentFile() {
+        // 現在のデータ配列をJSON文字列に変換
+        const currentDataJsonString = JSON.stringify(currentBroadcastData, null, 4);
+
+        // HTMLコンテンツ全体を取得
+        let htmlContent = document.documentElement.outerHTML;
+
+        // 正規表現を使って、元の `initialBroadcastData` の定義部分を、
+        // 現在の `currentDataJsonString` に置き換える
+        // ([\s\S]*?) は非貪欲マッチで、データブロック全体をキャプチャする
+        const regex = /const initialBroadcastData = \[\s*([\s\S]*?)\s*\];/;
+        
+        // 置き換え用の新しいデータブロック
+        // JSON.stringifyの結果を直接埋め込み、末尾にセミコロンを付ける
+        const newCodeBlock = `const initialBroadcastData = ${currentDataJsonString};`;
+
+        // 正規表現にマッチした部分を新しいデータブロックに置き換える
+        htmlContent = htmlContent.replace(regex, newCodeBlock);
+        
+        // Blobオブジェクトを作成
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        
+        // ダウンロードを実行
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'broadcast_manager.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        alert("最新のHTMLファイルがダウンロードされました。GitHubにコミットして更新してください！");
+        console.log("最新のHTMLファイルがダウンロードされました。");
+    }
+
+
+    // ----------------------------------------------------
+    // 12. 詳細表示エリアのHTML生成
+    // ----------------------------------------------------
+    function renderScriptHTML(data) {
+        
+        const mainTitle = `放送番号 ${data.broadcastNo} - ${data.date}`;
+        
+        // 朝の放送部分のHTML (ここはマスクを適用しない)
+        const morningScript = `
+            <div class="mb-8 p-6 border-l-4 border-orange-500 bg-orange-50 rounded-lg shadow-inner script-box">
+                <h3 class="text-2xl font-bold text-orange-600 mb-4">${data.morning.title} (放送番号 ${data.broadcastNo})</h3>
+                <p class="text-sm font-bold text-red-500 mb-4">【セリフ・アナウンス一切なし】</p>
+                <div class="ml-4 space-y-2">
+                    <p><span class="font-bold text-gray-700">1曲目：</span>${data.morning.music}</p>
+                    <p><span class="font-bold text-gray-700">コーナー：</span>${data.morning.corner}</p>
+                </div>
+            </div>
+        `;
+
+        // 昼の放送（共通構成）
+        // 雑学は配列だが、フォームで1つにまとめたので、ここでは全項目をHTML化
+        let triviaItems = data.lunch.triviaContent.map(item => `
+            <h4 class="font-bold mt-3 text-lg text-blue-700">${item.title}</h4>
+            <p class="mb-2">${item.text}</p>
+        `).join('');
+        
+        // 曲目リストの生成 
+        const musicListHtml = data.lunch.music.map((song, index) => {
+            // 曲目の表示形式を統一 (「1曲目：」などの番号はデータ自体に含まれないようにしたため、ここではシンプルに)
+            return `<li class="my-1">【曲目】<span class="font-bold">${song}</span></li>`;
+        }).join('');
+
+        const lunchScript = `
+            <div class="p-8 border-l-4 border-blue-600 bg-blue-50 rounded-lg shadow-inner script-box">
+                <h3 class="text-2xl font-bold text-blue-800 mb-4">${data.lunch.title} (放送番号 ${data.broadcastNo})</h3>
+                
+                <!-- 導入アナウンス -->
+                <div class="bg-yellow-100 p-4 rounded-md mb-6 relative script-box">
+                    <p class="font-bold text-xl text-yellow-800">🗣️ 導入アナウンス (CD音量0確認後)</p>
+                    <div class="masked-content p-2 bg-yellow-100 rounded-md mt-2">
+                         <p class="text-gray-700">${data.lunch.intro}</p>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">※iPadの読み上げ機能でこのセリフを選択してください。</p>
+                </div>
+
+                <div class="mb-6">
+                    <p class="font-bold text-xl text-green-700 mb-2">🎶 本日の曲目</p>
+                    <ul class="list-disc list-inside ml-4 text-gray-700">
+                        ${musicListHtml}
+                    </ul>
+                </div>
+                
+                <!-- 雑学コンテンツ -->
+                <div class="bg-gray-100 p-4 rounded-md mb-6 relative script-box">
+                    <p class="font-bold text-xl text-gray-800 mb-2">📝 ${data.lunch.triviaTitle}</p>
+                    <div class="masked-content p-2 bg-gray-100 rounded-md mt-2">
+                        <div class="text-gray-700">${triviaItems}</div>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">※iPadの読み上げ機能でこの雑学を選択してください。</p>
+                </div>
+                
+                <!-- 締めのセリフ -->
+                <div class="bg-red-100 p-4 rounded-md relative script-box mt-6">
+                    <p class="font-bold text-xl text-red-700">👋 締めのセリフ (CD終了後)</p>
+                    <div class="masked-content p-2 bg-red-100 rounded-md mt-2">
+                         <p class="text-gray-700">${data.lunch.closing}</p>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">※iPadの読み上げ機能でこのセリフを選択してください。</p>
+                </div>
+
+            </div>
+        `;
+
+        return `
+            <h2 class="text-3xl font-extrabold mb-6 pb-3 border-b-2 text-gray-800">
+                ${mainTitle}
+            </h2>
+            <div class="space-y-10">
+                ${morningScript}
+                ${lunchScript}
+            </div>
+        `;
+    }
+
+    // アプリケーションの初期化
+    window.onload = () => {
+        loadData(); // localStorageからデータを読み込む
+        renderSelector(); // セレクタをレンダリング
+    };
+
+</script>
+</body>
+</html>
