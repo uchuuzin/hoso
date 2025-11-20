@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>給食放送管理システム（統合版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100">
+
+<!-- ======================== -->
+<!-- 左：日付 & 放送番号 選択 -->
+<!-- ======================== -->
+<div class="min-h-screen flex flex-col md:flex-row">
+
+    <!-- 左側リスト -->
+    <div class="w-full md:w-1/3 p-6 bg-white shadow-lg">
+        <h1 class="text-3xl font-bold mb-4">給食放送データ</h1>
+
+        <button id="add-new-script"
+            class="no-print bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow mb-4">
+            ➕ 新しい放送データを追加
+        </button>
+
+        <div id="load-message" class="mb-4 text-gray-600"></div>
+
+        <div id="date-list" class="space-y-2"></div>
+    </div>
+
+    <!-- ======================== -->
+    <!-- 右：放送内容 or 編集画面 -->
+    <!-- ======================== -->
+    <div class="w-full md:w-2/3 p-6" id="right-panel">
+        <p class="text-gray-500">左の一覧から放送日を選んでください。</p>
+    </div>
+
+</div>
+
+<script>
+
+// ==========================
+// 初期データ（放送番号付き）
+// ==========================
+const initialBroadcastData = [
+    {
+        date: "2025-01-10",
+        type: 1,  // ← 放送番号１
+        title: "通常給食放送",
+        lunch: {
+            intro: "こんにちは、給食放送です。",
+            menu: ["ごはん", "味噌汁", "焼き魚"],
+            music: ["風になる – つじあやの"],
+            triviaTitle: "今日の雑学",
+            triviaContent: [
+                { title: "フランスの給食", text: "給食の時間が長いことで有名。" }
+            ],
+            closing: "それでは楽しい給食の時間を過ごしましょう。"
+        }
+    },
+    {
+        date: "2025-01-11",
+        type: 2,  // ← 放送番号２
+        title: "雑学放送",
+        lunch: {
+            intro: "今日は特別な雑学の日です。",
+            menu: ["カレー", "サラダ"],
+            music: ["トトロ – さんぽ"],
+            triviaTitle: "世界のクリスマス",
+            triviaContent: [
+                { title: "ドイツ", text: "アドベントカレンダーの由来…" }
+            ],
+            closing: "また次回の雑学もお楽しみに！"
+        }
+    }
+];
+
+// ==========================
+// データ保存
+// ==========================
+let broadcastData = JSON.parse(localStorage.getItem("broadcastData")) || initialBroadcastData;
+
+function saveData() {
+    localStorage.setItem("broadcastData", JSON.stringify(broadcastData));
+}
+
+// ==========================
+// 日付一覧を表示
+// ==========================
+function renderDateList() {
+    const dateListDiv = document.getElementById("date-list");
+    dateListDiv.innerHTML = "";
+
+    broadcastData.forEach(item => {
+        const btn = document.createElement("button");
+        btn.className = "w-full text-left p-3 bg-gray-200 hover:bg-gray-300 rounded";
+        btn.textContent = `${item.date}（放送番号${item.type}）`;
+        btn.onclick = () => selectScript(item);
+        dateListDiv.appendChild(btn);
+    });
+}
+
+renderDateList();
+
+// ==========================
+// 選択した放送を表示
+// ==========================
+function selectScript(data) {
+    const area = document.getElementById("right-panel");
+
+    area.innerHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold">${data.date}（放送番号 ${data.type}）</h2>
+
+            <button id="edit-button"
+                class="no-print bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded">
+                ✏️ 編集
+            </button>
+        </div>
+
+        <h3 class="text-xl font-bold mt-4">タイトル</h3>
+        <p>${data.title}</p>
+
+        <h3 class="text-xl font-bold mt-4">導入</h3>
+        <p>${data.lunch.intro}</p>
+
+        <h3 class="text-xl font-bold mt-4">メニュー</h3>
+        <ul>${data.lunch.menu.map(v => `<li>・${v}</li>`).join("")}</ul>
+
+        <h3 class="text-xl font-bold mt-4">曲目</h3>
+        <ul>${data.lunch.music.map(v => `<li>♪ ${v}</li>`).join("")}</ul>
+
+        <h3 class="text-xl font-bold mt-4">${data.lunch.triviaTitle}</h3>
+        <ul>${data.lunch.triviaContent.map(v => `<li><strong>${v.title}</strong>：${v.text}</li>`).join("")}</ul>
+
+        <h3 class="text-xl font-bold mt-4">締め</h3>
+        <p>${data.lunch.closing}</p>
+    `;
+
+    document.getElementById("edit-button").onclick = () => renderEditor(data);
+}
+
+// ==========================
+// 編集モード
+// ==========================
+function renderEditor(data) {
+    const area = document.getElementById("right-panel");
+
+    area.innerHTML = `
+        <h2 class="text-2xl font-bold mb-4">編集モード：${data.date}</h2>
+
+        <label class="font-bold">放送番号（1〜3）</label>
+        <input id="type" type="number" min="1" max="3" class="w-full border p-2 mb-4" value="${data.type}">
+
+        <label class="font-bold">タイトル</label>
+        <input id="title" class="w-full border p-2 mb-4" value="${data.title}">
+
+        <label class="font-bold">導入アナウンス</label>
+        <textarea id="intro" class="w-full border p-2 mb-4">${data.lunch.intro}</textarea>
+
+        <label class="font-bold">メニュー（改行区切り）</label>
+        <textarea id="menu" class="w-full border p-2 mb-4">${data.lunch.menu.join("\n")}</textarea>
+
+        <label class="font-bold">曲目（改行区切り）</label>
+        <textarea id="music" class="w-full border p-2 mb-4">${data.lunch.music.join("\n")}</textarea>
+
+        <label class="font-bold">雑学タイトル</label>
+        <input id="triviaTitle" class="w-full border p-2 mb-4" value="${data.lunch.triviaTitle}">
+
+        <label class="font-bold">雑学本文（タイトル:テキスト の形式、改行区切り）</label>
+        <textarea id="triviaContent" class="w-full border p-2 mb-4">${data.lunch.triviaContent
+            .map(v => `${v.title}:${v.text}`).join("\n")}</textarea>
+
+        <label class="font-bold">締めのセリフ</label>
+        <textarea id="closing" class="w-full border p-2 mb-4">${data.lunch.closing}</textarea>
+
+        <button id="save"
+            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+            💾 保存
+        </button>
+    `;
+
+    document.getElementById("save").onclick = () => saveEdit(data);
+}
+
+// ==========================
+// 編集保存
+// ==========================
+function saveEdit(data) {
+    data.type = Number(document.getElementById("type").value);
+    data.title = document.getElementById("title").value;
+
+    data.lunch.intro = document.getElementById("intro").value;
+
+    data.lunch.menu = document.getElementById("menu").value.split("\n").filter(v => v);
+    data.lunch.music = document.getElementById("music").value.split("\n").filter(v => v);
+
+    data.lunch.triviaTitle = document.getElementById("triviaTitle").value;
+    data.lunch.triviaContent = document.getElementById("triviaContent").value.split("\n")
+        .map(line => {
+            const [title, ...rest] = line.split(":");
+            return { title, text: rest.join(":") };
+        });
+
+    data.lunch.closing = document.getElementById("closing").value;
+
+    saveData();
+    renderDateList();
+    selectScript(data);
+}
+
+</script>
+
+</body>
+</html>
