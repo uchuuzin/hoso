@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>放送台本デジタル管理ツール</title>
+<style>
+body { font-family: sans-serif; margin: 20px; }
+button { margin: 2px; }
+.section { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+.corner { margin-left: 20px; }
+.header { display: flex; gap: 10px; margin-bottom: 15px; }
+textarea { width: 100%; height: 60px; }
+#jsonArea { width: 100%; height: 100px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>放送台本管理ツール</h1>
+
+<div class="header">
+  <button onclick="addEpisode()">新規放送追加</button>
+  <button onclick="exportJSON()">JSONエクスポート</button>
+  <button onclick="importJSON()">JSONインポート</button>
+</div>
+
+<div id="episodeList"></div>
+
+<h2>JSONバックアップ / インポート</h2>
+<textarea id="jsonArea" placeholder="ここにJSONを貼り付け"></textarea>
+
+<script>
+let episodes = [];
+
+// 放送回を表示
+function renderEpisodes() {
+  const list = document.getElementById('episodeList');
+  list.innerHTML = '';
+  episodes.forEach((ep, index) => {
+    const section = document.createElement('div');
+    section.className = 'section';
+    
+    section.innerHTML = `
+      <strong>第${index+1}回 放送</strong> - ${ep.date || '日付未設定'} 
+      <button onclick="editEpisode(${index})">編集</button>
+      <button onclick="duplicateEpisode(${index})">複製</button>
+      <button onclick="deleteEpisode(${index})">削除</button>
+      <div class="corner">
+        <h4>オープニング</h4>
+        <p>${ep.opening || ''}</p>
+        <h4>雑学コーナー</h4>
+        <p>${ep.trivia || ''}</p>
+        <h4>エンディング</h4>
+        <p>${ep.ending || ''}</p>
+      </div>
+    `;
+    list.appendChild(section);
+  });
+}
+
+// 新規放送追加
+function addEpisode() {
+  const date = prompt("日付を入力 (YYYY-MM-DD)");
+  episodes.push({ date, opening:'', trivia:'', ending:'' });
+  renderEpisodes();
+  editEpisode(episodes.length-1);
+}
+
+// 編集
+function editEpisode(index) {
+  const ep = episodes[index];
+  ep.date = prompt("日付を入力", ep.date) || ep.date;
+  ep.opening = prompt("オープニング内容を入力", ep.opening) || ep.opening;
+  ep.trivia = prompt("雑学コーナー内容を入力", ep.trivia) || ep.trivia;
+  ep.ending = prompt("エンディング内容を入力", ep.ending) || ep.ending;
+  renderEpisodes();
+}
+
+// 複製
+function duplicateEpisode(index) {
+  const copy = {...episodes[index]};
+  episodes.splice(index+1, 0, copy);
+  renderEpisodes();
+}
+
+// 削除
+function deleteEpisode(index) {
+  if(confirm('本当に削除しますか？')){
+    episodes.splice(index, 1);
+    renderEpisodes();
+  }
+}
+
+// JSONエクスポート
+function exportJSON() {
+  const json = JSON.stringify(episodes, null, 2);
+  document.getElementById('jsonArea').value = json;
+}
+
+// JSONインポート
+function importJSON() {
+  try{
+    const data = JSON.parse(document.getElementById('jsonArea').value);
+    if(Array.isArray(data)) {
+      episodes = data;
+      renderEpisodes();
+    } else {
+      alert("JSONの形式が正しくありません");
+    }
+  } catch(e){
+    alert("JSON解析エラー: " + e.message);
+  }
+}
+
+renderEpisodes();
+</script>
+
+</body>
+</html>
