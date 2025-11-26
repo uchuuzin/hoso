@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>放送原稿 閲覧・マスク表示ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+
+    <h1 class="text-2xl font-bold mb-4">放送原稿ツール</h1>
+
+    <!-- 一覧表示 -->
+    <div id="broadcastList" class="space-y-4"></div>
+
+    <!-- 編集モーダル -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center">
+        <div class="bg-white p-4 rounded shadow w-80">
+            <h2 class="text-xl font-bold mb-2">放送内容を編集</h2>
+            
+            <label class="text-sm">日付</label>
+            <input id="editDate" type="date" class="w-full border p-2 rounded mb-3">
+
+            <label class="text-sm">内容</label>
+            <!-- ← textarea に変えた！改行できるように -->
+            <textarea id="editContent" rows="6"
+                class="w-full border p-2 rounded mb-3 whitespace-pre-wrap"></textarea>
+
+            <div class="flex justify-end space-x-2">
+                <button onclick="saveEdit()" class="px-4 py-2 bg-blue-600 text-white rounded">保存</button>
+                <button onclick="closeEdit()" class="px-4 py-2 bg-gray-500 text-white rounded">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作ボタン -->
+    <div class="mt-6 space-x-2">
+        <button onclick="addBroadcast()" class="px-4 py-2 bg-green-600 text-white rounded">追加</button>
+        <button onclick="downloadJSON()" class="px-4 py-2 bg-blue-600 text-white rounded">エクスポート</button>
+
+        <label class="px-4 py-2 bg-gray-700 text-white rounded cursor-pointer">
+            インポート
+            <input type="file" accept="application/json" class="hidden" onchange="importJSON(event)">
+        </label>
+    </div>
+
+    <script>
+        let broadcasts = [];
+        let editIndex = null;
+
+        // 初期表示（ローカル読み込み）
+        window.onload = () => {
+            const saved = localStorage.getItem("broadcastData");
+            broadcasts = saved ? JSON.parse(saved) : [];
+            render();
+        };
+
+        function render() {
+            const list = document.getElementById("broadcastList");
+            list.innerHTML = "";
+
+            broadcasts.forEach((b, i) => {
+                const div = document.createElement("div");
+                div.className = "bg-white p-4 rounded shadow";
+
+                div.innerHTML = `
+                    <div class="text-sm text-gray-600">${b.date}</div>
+                    <div class="mt-2 whitespace-pre-wrap">${b.content}</div>
+
+                    <div class="mt-3 flex space-x-2">
+                        <button onclick="openEdit(${i})"
+                            class="px-3 py-1 bg-blue-500 text-white rounded">編集</button>
+
+                        <button onclick="duplicate(${i})"
+                            class="px-3 py-1 bg-purple-500 text-white rounded">複製</button>
+
+                        <button onclick="remove(${i})"
+                            class="px-3 py-1 bg-red-500 text-white rounded">削除</button>
+                    </div>
+                `;
+
+                list.appendChild(div);
+            });
+        }
+
+        function openEdit(i) {
+            editIndex = i;
+            document.getElementById("editDate").value = broadcasts[i].date;
+            document.getElementById("editContent").value = broadcasts[i].content;
+            document.getElementById("editModal").classList.remove("hidden");
+        }
+
+        function closeEdit() {
+            editIndex = null;
+            document.getElementById("editModal").classList.add("hidden");
+        }
+
+        function saveEdit() {
+            broadcasts[editIndex].date = document.getElementById("editDate").value;
+            broadcasts[editIndex].content = document.getElementById("editContent").value;
+            save();
+            closeEdit();
+            render();
+        }
+
+        function addBroadcast() {
+            const today = new Date().toISOString().slice(0, 10);
+            broadcasts.push({ date: today, content: "（内容を入力）" });
+            save();
+            render();
+        }
+
+        function duplicate(i) {
+            broadcasts.push({ ...broadcasts[i] });
+            save();
+            render();
+        }
+
+        function remove(i) {
+            if (broadcasts.length === 1) {
+                alert("最後の1つは削除できません。");
+                return;
+            }
+            broadcasts.splice(i, 1);
+            save();
+            render();
+        }
+
+        function save() {
+            localStorage.setItem("broadcastData", JSON.stringify(broadcasts));
+        }
+
+        function downloadJSON() {
+            const data = JSON.stringify(broadcasts, null, 2);
+            const blob = new Blob([data], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "broadcast_backup.json";
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                broadcasts = JSON.parse(reader.result);
+                save();
+                render();
+            };
+            reader.readAsText(file);
+        }
+    </script>
+
+</body>
+</html>
