@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>放送原稿ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+
+<h1 class="text-2xl font-bold mb-4">放送原稿ツール</h1>
+
+<div id="broadcastList" class="space-y-4"></div>
+
+<!-- 編集モーダル -->
+<div id="editModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center">
+    <div class="bg-white p-4 rounded shadow w-80">
+        <h2 class="text-xl font-bold mb-2">放送内容を編集</h2>
+
+        <label class="text-sm">日付</label>
+        <input id="editDate" type="date" class="w-full border p-2 rounded mb-3">
+
+        <label class="text-sm">オープニング</label>
+        <textarea id="editOpening" rows="3" class="w-full border p-2 rounded mb-3 whitespace-pre-wrap"></textarea>
+
+        <label class="text-sm">雑学コーナー</label>
+        <textarea id="editTrivia" rows="4" class="w-full border p-2 rounded mb-3 whitespace-pre-wrap"></textarea>
+
+        <label class="text-sm">エンディング</label>
+        <textarea id="editEnding" rows="3" class="w-full border p-2 rounded mb-3 whitespace-pre-wrap"></textarea>
+
+        <div class="flex justify-end space-x-2">
+            <button onclick="saveEdit()" class="px-4 py-2 bg-blue-600 text-white rounded">保存</button>
+            <button onclick="closeEdit()" class="px-4 py-2 bg-gray-500 text-white rounded">閉じる</button>
+        </div>
+    </div>
+</div>
+
+<div class="mt-6 space-x-2">
+    <button onclick="startAdd()" class="px-4 py-2 bg-green-600 text-white rounded">追加</button>
+    <button onclick="downloadJSON()" class="px-4 py-2 bg-blue-600 text-white rounded">エクスポート</button>
+
+    <label class="px-4 py-2 bg-gray-700 text-white rounded cursor-pointer">
+        インポート
+        <input type="file" accept="application/json" class="hidden" onchange="importJSON(event)">
+    </label>
+</div>
+
+<script>
+let broadcasts = [];
+let editIndex = null;
+
+// 初期読み込み
+window.onload = () => {
+    const saved = localStorage.getItem("broadcastData");
+    broadcasts = saved ? JSON.parse(saved) : [];
+    render();
+};
+
+function render() {
+    const list = document.getElementById("broadcastList");
+    list.innerHTML = "";
+
+    broadcasts.forEach((b, i) => {
+        const div = document.createElement("div");
+        div.className = "bg-white p-4 rounded shadow";
+
+        div.innerHTML = `
+            <div class="text-sm text-gray-600">${b.date}</div>
+
+            <div class="mt-2">
+                <strong>◆ オープニング</strong>
+                <div class="whitespace-pre-wrap">${b.opening}</div>
+
+                <strong class="block mt-2">◆ 雑学コーナー</strong>
+                <div class="whitespace-pre-wrap">${b.trivia}</div>
+
+                <strong class="block mt-2">◆ エンディング</strong>
+                <div class="whitespace-pre-wrap">${b.ending}</div>
+            </div>
+
+            <div class="mt-3 flex space-x-2">
+                <button onclick="openEdit(${i})" class="px-3 py-1 bg
