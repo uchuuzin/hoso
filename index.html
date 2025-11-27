@@ -2,144 +2,120 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>放送原稿ツール</title>
-
-<!-- --- できるだけシンプルな CSS --- -->
+<title>放送台本管理ツール（超シンプル）</title>
 <style>
-    body { font-family: sans-serif; padding: 20px; }
-    textarea { width:100%; height:160px; border:1px solid #aaa; padding:8px; }
-    .box { border:1px solid #999; padding:10px; margin-bottom:16px; }
-    .page-break { page-break-before: always; }
-    @media print {
-        .editor, .io { display:none; }
-        .page-break { page-break-before: always; }
-    }
+.preserve { white-space: pre-wrap; }
+textarea { width: 100%; height: 150px; }
 </style>
 </head>
-
 <body>
 
-<h2>📄 放送原稿ツール</h2>
+<h1>放送台本管理ツール</h1>
 
-<div class="io">
-    <h3>JSON入力</h3>
-    <p>※改行は <code>\n</code> を使ってください。</p>
-    <textarea id="jsonInput" placeholder='{"2025-11-27":{"op":"…","z":"…","ed":"…"}}'></textarea>
-    <button onclick="loadJSON()">読み込み</button>
+<button onclick="addEpisode()">新規放送追加</button>
+<button onclick="exportJSON()">JSONエクスポート</button>
+<button onclick="importJSON()">JSONインポート</button>
+<button onclick="clearLocal()">ローカル削除</button>
 
-    <h3>JSON出力</h3>
-    <p>※改行は <code>\n</code> で保存されます。</p>
-    <textarea id="jsonOutput" readonly></textarea>
-</div>
+<div id="episodeList"></div>
 
-
-<hr>
-
-<div id="editorArea" class="editor"></div>
-
-<button onclick="addNew()">＋ 新しい日付を追加</button>
-<button onclick="exportJSON()">JSONを書き出す</button>
-
+<h2>JSONバックアップ / インポート</h2>
+<p>※改行は <code>\n</code> を使用してください。</p>
+<textarea id="jsonArea"></textarea>
 
 <script>
+let episodes = [];
 
-// -----------------------------------------------------
-// 保存されているデータ
-// -----------------------------------------------------
-let data = {};  // {日付: {op, z, ed}}
+window.onload = function() {
+  const saved = localStorage.getItem('episodes');
+  if (saved) episodes = JSON.parse(saved);
+  renderEpisodes();
+};
 
-
-// -----------------------------------------------------
-// JSON読み込み
-// -----------------------------------------------------
-function loadJSON() {
-    try {
-        const input = document.getElementById("jsonInput").value.trim();
-        if (!input) return;
-
-        data = JSON.parse(input);
-        render();
-    } catch (e) {
-        alert("JSONが正しくありません");
-    }
+function saveLocal() {
+  localStorage.setItem('episodes', JSON.stringify(episodes));
 }
 
+function renderEpisodes() {
+  const list = document.getElementById('episodeList');
+  list.innerHTML = '';
+  episodes.forEach((ep, i) => {
+    const s = document.createElement('div');
+    s.innerHTML = `
+      <hr>
+      <strong>第${i+1}回</strong> ${ep.date || '日付未設定'}
+      <button onclick="editEpisode(${i})">編集</button>
+      <button onclick="duplicateEpisode(${i})">複製</button>
+      <button onclick="deleteEpisode(${i})">削除</button>
+      <div>
+        <h4>オープニング</h4>
+        <p class="preserve">${ep.opening || ''}</p>
 
-// -----------------------------------------------------
-// JSON書き出し
-// -----------------------------------------------------
+        <h4>雑学コーナー</h4>
+        <p class="preserve">${ep.trivia || ''}</p>
+
+        <h4>エンディング</h4>
+        <p class="preserve">${ep.ending || ''}</p>
+      </div>
+    `;
+    list.appendChild(s);
+  });
+  saveLocal();
+}
+
+function addEpisode() {
+  const date = prompt("日付を入力");
+  if (!date) return;
+  episodes.push({ date, opening:'', trivia:'', ending:'' });
+  renderEpisodes();
+  editEpisode(episodes.length-1, { skipDate:true });
+}
+
+function editEpisode(i, opt={}) {
+  const ep = episodes[i];
+  if (!opt.skipDate) ep.date = prompt("日付", ep.date) || ep.date;
+  ep.opening = prompt("オープニング（改行可）", ep.opening) || ep.opening;
+  ep.trivia  = prompt("雑学（改行可）", ep.trivia) || ep.trivia;
+  ep.ending  = prompt("エンディング（改行可）", ep.ending) || ep.ending;
+  renderEpisodes();
+}
+
+function duplicateEpisode(i) {
+  episodes.splice(i+1, 0, {...episodes[i]});
+  renderEpisodes();
+}
+
+function deleteEpisode(i) {
+  if (confirm("削除しますか？")) {
+    episodes.splice(i, 1);
+    renderEpisodes();
+  }
+}
+
 function exportJSON() {
-    document.getElementById("jsonOutput").value =
-        JSON.stringify(data, null, 2);
+  document.getElementById('jsonArea').value =
+    JSON.stringify(episodes, null, 2);
 }
 
-
-// -----------------------------------------------------
-// 日付ブロックをレンダリング
-// -----------------------------------------------------
-function render() {
-    const area = document.getElementById("editorArea");
-    area.innerHTML = "";
-
-    Object.keys(data).sort().forEach((date, index) => {
-        const b = document.createElement("div");
-        b.className = "box";
-
-        // 印刷時ページ区切り
-        if (index > 0) b.classList.add("page-break");
-
-        b.innerHTML = `
-            <h3>${date}</h3>
-            <button onclick="del('${date}')">削除</button><br><br>
-
-            <b>オープニング</b><br>
-            <textarea onchange="update('${date}', 'op', this.value)">${data[date].op}</textarea><br><br>
-
-            <b>雑学</b><br>
-            <textarea onchange="update('${date}', 'z', this.value)">${data[date].z}</textarea><br><br>
-
-            <b>エンディング</b><br>
-            <textarea onchange="update('${date}', 'ed', this.value)">${data[date].ed}</textarea>
-        `;
-        area.appendChild(b);
-    });
-}
-
-
-// -----------------------------------------------------
-// 編集更新
-// -----------------------------------------------------
-function update(date, key, value) {
-    data[date][key] = value;
-}
-
-
-// -----------------------------------------------------
-// 新しい日付追加
-// -----------------------------------------------------
-function addNew() {
-    const d = prompt("日付を入力 (例: 2025-11-27)");
-    if (!d) return;
-
-    if (data[d]) {
-        alert("その日付はすでにあります");
-        return;
+function importJSON() {
+  try {
+    const data = JSON.parse(document.getElementById('jsonArea').value);
+    if (Array.isArray(data)) {
+      episodes = data;
+      renderEpisodes();
     }
-
-    data[d] = { op: "", z: "", ed: "" };
-    render();
+  } catch (e) {
+    alert("JSONエラー: " + e.message);
+  }
 }
 
-
-// -----------------------------------------------------
-// 削除（最後の1つでも削除できる）
-// -----------------------------------------------------
-function del(date) {
-    if (!confirm(date + " を削除しますか？")) return;
-    delete data[date];
-    render();
+function clearLocal() {
+  if (confirm("全データを削除しますか？")) {
+    localStorage.removeItem('episodes');
+    episodes = [];
+    renderEpisodes();
+  }
 }
-
 </script>
 
 </body>
