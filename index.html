@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>放送台本管理ツール（超シンプル）</title>
+<style>
+.preserve { white-space: pre-wrap; }
+textarea { width: 100%; height: 150px; }
+</style>
+</head>
+<body>
+
+<h1>放送台本管理ツール</h1>
+
+<button onclick="addEpisode()">新規放送追加</button>
+<button onclick="exportJSON()">JSONエクスポート</button>
+<button onclick="importJSON()">JSONインポート</button>
+<button onclick="clearLocal()">ローカル削除</button>
+
+<div id="episodeList"></div>
+
+<h2>JSONバックアップ / インポート</h2>
+<p>※改行は <strong>\n</strong> を使用してください。</p>
+<textarea id="jsonArea"></textarea>
+
+<script>
+let episodes = [];
+
+// ローカルロード
+window.onload = function() {
+  const saved = localStorage.getItem('episodes');
+  if (saved) episodes = JSON.parse(saved);
+  renderEpisodes();
+};
+
+// ローカル保存
+function saveLocal() {
+  localStorage.setItem('episodes', JSON.stringify(episodes));
+}
+
+// 表示
+function renderEpisodes() {
+  const list = document.getElementById('episodeList');
+  list.innerHTML = '';
+  episodes.forEach((ep, i) => {
+    const s = document.createElement('div');
+    s.innerHTML = `
+      <hr>
+      <strong>放送番号：${ep.number || '未設定'}</strong>　${ep.date || '日付未設定'}
+      <button onclick="editEpisode(${i})">編集</button>
+      <button onclick="duplicateEpisode(${i})">複製</button>
+      <button onclick="deleteEpisode(${i})">削除</button>
+
+      <div>
+        <h4>オープニング</h4>
+        <p class="preserve">${ep.opening || ''}</p>
+
+        <h4>雑学コーナー</h4>
+        <p class="preserve">${ep.trivia || ''}</p>
+
+        <h4>エンディング</h4>
+        <p class="preserve">${ep.ending || ''}</p>
+      </div>
+    `;
+    list.appendChild(s);
+  });
+  saveLocal();
+}
+
+// 新規
+function addEpisode() {
+  const number = prompt("放送番号を入力（例：1, 01, B-2 など）");
+  if (!number) return;
+
+  const date = prompt("日付を入力（例：2025-01-26）");
+  if (!date) return;
+
+  episodes.push({
+    number,
+    date,
+    opening: '',
+    trivia: '',
+    ending: ''
+  });
+
+  renderEpisodes();
+  editEpisode(episodes.length - 1, { skipDate: true, skipNumber: true });
+}
+
+// 編集
+function editEpisode(i, opt = {}) {
+  const ep = episodes[i];
+
+  if (!opt.skipNumber)
+    ep.number = prompt("放送番号", ep.number) || ep.number;
+
+  if (!opt.skipDate)
+    ep.date = prompt("日付", ep.date) || ep.date;
+
+  ep.opening = prompt("オープニング（改行は \\n ）", ep.opening) || ep.opening;
+  ep.trivia  = prompt("雑学（改行は \\n ）", ep.trivia) || ep.trivia;
+  ep.ending  = prompt("エンディング（改行は \\n ）", ep.ending) || ep.ending;
+
+  renderEpisodes();
+}
+
+// 複製
+function duplicateEpisode(i) {
+  episodes.splice(i + 1, 0, { ...episodes[i] });
+  renderEpisodes();
+}
+
+// 削除
+function deleteEpisode(i) {
+  if (confirm("削除しますか？")) {
+    episodes.splice(i, 1);
+    renderEpisodes();
+  }
+}
+
+// JSON出力
+function exportJSON() {
+  document.getElementById('jsonArea').value =
+    JSON.stringify(episodes, null, 2);
+}
+
+// JSON読み込み
+function importJSON() {
+  try {
+    const data = JSON.parse(document.getElementById('jsonArea').value);
+    if (Array.isArray(data)) {
+      episodes = data;
+      renderEpisodes();
+    }
+  } catch (e) {
+    alert("JSONエラー: " + e.message);
+  }
+}
+
+// ローカル初期化
+function clearLocal() {
+  if (confirm("全データを削除しますか？")) {
+    localStorage.removeItem('episodes');
+    episodes = [];
+    renderEpisodes();
+  }
+}
+</script>
+
+</body>
+</html>
