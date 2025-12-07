@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>放送台本管理ツール（超シンプル）</title>
+<title>放送管理ツール</title>
 <style>
 .preserve { white-space: pre-wrap; }
 textarea { width: 100%; height: 150px; }
@@ -10,7 +10,7 @@ textarea { width: 100%; height: 150px; }
 </head>
 <body>
 
-<h1>放送台本管理ツール</h1>
+<h1>放送管理ツール</h1>
 
 <button onclick="addEpisode()">新規放送追加</button>
 <button onclick="exportJSON()">JSONエクスポート</button>
@@ -20,7 +20,7 @@ textarea { width: 100%; height: 150px; }
 <div id="episodeList"></div>
 
 <h2>JSONバックアップ / インポート</h2>
-<p>※改行は <strong>\n</strong> を使用してください。</p>
+<p>データ転送はこちら。※改行は <strong>\n</strong> を使用してください。</p>
 <textarea id="jsonArea"></textarea>
 
 <script>
